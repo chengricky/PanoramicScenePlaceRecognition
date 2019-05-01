@@ -44,7 +44,7 @@ def loadSceneRecognitionModel(trainedNetVLADLayers):
     return model
 
 # 导入训练过的resnet-netvlad模型
-def loadPlaceRecognitionEncoder(netVLADtrainNum, pooling, num_clusters):
+def loadPlaceRecognitionEncoder(netVLADtrainNum):
     model = netVLADbaseResNet(wideresnet.BasicBlock, [2, 2, 2, 2], netVLADtrain=netVLADtrainNum)
     model_file = 'Place365/wideresnet18_places365.pth.tar'
     state_dict = getPretrainedParams(model_file)

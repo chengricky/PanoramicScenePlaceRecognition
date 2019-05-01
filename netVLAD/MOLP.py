@@ -57,7 +57,11 @@ class DatasetFromStruct(data.Dataset):
 
     def getPositives(self):
         if self.positives is None:
-            list(range(0, self.numQ))
+            listgts = []
+            for i in range(0, self.numQ):
+                listgt = [i-ii for ii in range(-5, 6)]
+                listgts.append(listgt)
+            self.positives = listgts
 
         return self.positives
 
