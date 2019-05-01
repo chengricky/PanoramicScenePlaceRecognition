@@ -1,3 +1,5 @@
+# Train the NetVLAD network with attention and
+
 from __future__ import print_function
 import argparse
 from math import log10, ceil
@@ -27,17 +29,18 @@ from netVLAD import netvlad
 
 
 import warnings
+import arguments
 
 
 # --optim=ADAM --resume=runs/Dec29_14-09-36_alexnet_netvlad/ --mode=train --arch=alexnet --pooling=netvlad --num_clusters=64 --start-epoch=30 --nEpochs=45
 # --mode=test --split=val --resume=runs/Dec29_14-09-36_alexnet_netvlad/ --ckpt=best
 
-parser = argparse.ArgumentParser(description='pytorch-NetVlad')
-parser.add_argument('--mode', type=str, default='train', help='Mode', choices=['train', 'test', 'cluster'])
+parser = argparse.ArgumentParser(description='ScenePlaceRecognitionTrain')
+parser.add_argument('--mode', type=str, default='train', help='Mode', choices=['train', 'cluster'])
 parser.add_argument('--batchSize', type=int, default=3,
                     help='Number of triplets (query, pos, negs). Each triplet consists of 12 images.')
-parser.add_argument('--cacheBatchSize', type=int, default=24, help='Batch size for caching and testing')#24
-parser.add_argument('--cacheRefreshRate', type=int, default=1000,#1000
+parser.add_argument('--cacheBatchSize', type=int, default=24, help='Batch size for caching and testing')
+parser.add_argument('--cacheRefreshRate', type=int, default=1000,
                     help='How often to refresh cache, in number of queries. 0 for off')
 parser.add_argument('--nEpochs', type=int, default=30, help='number of epochs to train for')
 parser.add_argument('--start-epoch', default=0, type=int, metavar='N',
@@ -56,7 +59,6 @@ parser.add_argument('--dataPath', type=str, default='data/', help='Path for cent
 parser.add_argument('--runsPath', type=str, default='runs/', help='Path to save runs to.')
 parser.add_argument('--savePath', type=str, default='checkpoints/',
                     help='Path to save checkpoints to in logdir. Default=checkpoints/')
-# parser.add_argument('--cachePath', type=str, default=environ['TMPDIR'], help='Path to save cache to.')
 parser.add_argument('--cachePath', type=str, default='/tmp/', help='Path to save cache to.')
 parser.add_argument('--resume', type=str, default='',
                     help='Path to load checkpoint from, for resuming training or testing.')
@@ -66,7 +68,7 @@ parser.add_argument('--evalEvery', type=int, default=1,
                     help='Do a validation set run, and save, every N epochs.')
 parser.add_argument('--patience', type=int, default=10, help='Patience for early stopping. 0 is off.')
 parser.add_argument('--dataset', type=str, default='pittsburgh',
-                    help='Dataset to use', choices=['pittsburgh', 'MOLP'])
+                    help='Dataset to use', choices=['pittsburgh', 'tokyo247'])
 parser.add_argument('--arch', type=str, default='vgg16',
                     help='basenetwork to use', choices=['vgg16', 'alexnet', 'resnet18'])
 parser.add_argument('--pooling', type=str, default='netvlad', help='type of pooling to use',
@@ -76,6 +78,7 @@ parser.add_argument('--margin', type=float, default=0.1, help='Margin for triple
 parser.add_argument('--split', type=str, default='val', help='Data split to use for testing. Default is val',
                     choices=['test', 'test250k', 'train', 'val'])
 parser.add_argument('--fromscratch', action='store_true', help='Train from scratch rather than using pretrained models')
+parser.add_argument('--withAttention')
 
 
 def train(epoch):
@@ -413,51 +416,22 @@ class L2Norm(nn.Module):
 
 
 if __name__ == "__main__":
-    # 屏蔽warnings -- UserWarning: Loky-backed parallel loops cannot be called in a multiprocessing, setting n_jobs=1
+    # ignore warnings -- UserWarning: Loky-backed parallel loops cannot be called in a multiprocessing, setting n_jobs=1
     warnings.filterwarnings("ignore")
 
+    ## read arguments from command or json file
     opt = parser.parse_args()
-
     restore_var = ['lr', 'lrStep', 'lrGamma', 'weightDecay', 'momentum',
                    'runsPath', 'savePath', 'arch', 'num_clusters', 'pooling', 'optim',
                    'margin', 'seed', 'patience']
-## 从文件恢复参数
     if opt.resume:
-        flag_file = join(opt.resume, 'checkpoints', 'flags.json')
-        if exists(flag_file):
-            with open(flag_file, 'r') as f:
-                stored_flags = {'--' + k: str(v) for k, v in json.load(f).items() if k in restore_var}
-                to_del = []
-                for flag, val in stored_flags.items():
-                    for act in parser._actions:
-                        if act.dest == flag[2:]:
-                            # store_true / store_false args don't accept arguments, filter these
-                            if type(act.const) == type(True):
-                                if val == str(act.default):
-                                    to_del.append(flag)
-                                else:
-                                    stored_flags[flag] = ''
-                for flag in to_del: del stored_flags[flag]
-
-                train_flags = [x for x in list(sum(stored_flags.items(), tuple())) if len(x) > 0]
-                print('Restored flags:', train_flags)
-                opt = parser.parse_args(train_flags, namespace=opt)
-
+        opt = arguments.readArguments(opt, parser, restore_var)
     print(opt)
 
-## 指定数据集
-    if opt.dataset.lower() == 'pittsburgh':
-        from netVLAD import pittsburgh as dataset
-    elif opt.dataset.lower() == 'molp':
-        from netVLAD import MOLP as dataset
-    else:
-        raise Exception('Unknown dataset')
-
-## 指定设备
+    ## desinate the device to train
     cuda = not opt.nocuda
     if cuda and not torch.cuda.is_available():
         raise Exception("No GPU found, please run with --nocuda")
-
     device = torch.device("cuda" if cuda else "cpu")
 
     random.seed(opt.seed)
@@ -466,37 +440,30 @@ if __name__ == "__main__":
     if cuda:
         torch.cuda.manual_seed(opt.seed)
 
-## 导入数据集
+    ## designate the dataset to train
+    if opt.dataset.lower() == 'pittsburgh':
+        from netVLAD import pittsburgh as dataset
+    elif opt.dataset.lower() == 'tokyo247':
+        from netVLAD import tokyo247 as dataset
+    else:
+        raise Exception('Unknown dataset')
+
+    ## read image files of the desinated dataset
     print('===> Loading dataset(s)')
     if opt.mode.lower() == 'train':
         whole_train_set = dataset.get_whole_training_set()
         whole_training_data_loader = DataLoader(dataset=whole_train_set,
                                                 num_workers=opt.threads, batch_size=opt.cacheBatchSize, shuffle=False,
                                                 pin_memory=cuda)
-
         train_set = dataset.get_training_query_set(opt.margin)
 
         print('====> Training query set:', len(train_set))
         whole_test_set = dataset.get_whole_val_set()
         print('===> Evaluating on val set, query count:', whole_test_set.dbStruct.numQ)
-    elif opt.mode.lower() == 'test':
-        if opt.split.lower() == 'test':
-            whole_test_set = dataset.get_whole_test_set()
-            print('===> Evaluating on test set')
-        elif opt.split.lower() == 'test250k':
-            whole_test_set = dataset.get_250k_test_set()
-            print('===> Evaluating on test250k set')
-        elif opt.split.lower() == 'train':
-            whole_test_set = dataset.get_whole_training_set()
-            print('===> Evaluating on train set')
-        elif opt.split.lower() == 'val':
-            whole_test_set = dataset.get_whole_val_set()
-            print('===> Evaluating on val set')
-        else:
-            raise ValueError('Unknown dataset split: ' + opt.split)
-        print('====> Query count:', whole_test_set.numQ)
     elif opt.mode.lower() == 'cluster':
         whole_train_set = dataset.get_whole_training_set(onlyDB=True)
+    else:
+        raise Exception('Unknown mode')
 
 ## 构造网络模型
     print('===> Building model')
