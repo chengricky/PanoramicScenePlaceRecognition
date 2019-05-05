@@ -2,8 +2,10 @@
 <project version="4">
   <component name="ChangeListManager">
     <list default="true" id="b5717451-f7d5-449e-a701-353ac71b47c3" name="Default Changelist" comment="">
+      <change afterPath="$PROJECT_DIR$/netVLAD/Highway.py" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/netVLAD/HighwayTrain.py" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/Place365/wideresnet.py" beforeDir="false" afterPath="$PROJECT_DIR$/Place365/wideresnet.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/ScenePlaceRecgonitionTrain.py" beforeDir="false" afterPath="$PROJECT_DIR$/ScenePlaceRecgonitionTrain.py" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/ScenePlaceRecognitionMain.py" beforeDir="false" afterPath="$PROJECT_DIR$/ScenePlaceRecognitionMain.py" afterDir="false" />
     </list>
     <option name="EXCLUDED_CONVERTED_TO_IGNORED" value="true" />
@@ -14,13 +16,71 @@
   </component>
   <component name="FileEditorManager">
     <leaf SIDE_TABS_SIZE_LIMIT_KEY="300">
-      <file pinned="false" current-in-tab="true">
+      <file pinned="false" current-in-tab="false">
         <entry file="file://$PROJECT_DIR$/ScenePlaceRecognitionMain.py">
           <provider selected="true" editor-type-id="text-editor">
-            <state relative-caret-position="751">
-              <caret line="135" column="20" selection-start-line="135" selection-start-column="20" selection-end-line="135" selection-end-column="20" />
+            <state relative-caret-position="-1340">
+              <caret line="47" column="58" selection-start-line="47" selection-start-column="58" selection-end-line="47" selection-end-column="58" />
               <folding>
                 <element signature="e#107#144#0" expanded="true" />
+              </folding>
+            </state>
+          </provider>
+        </entry>
+      </file>
+      <file pinned="false" current-in-tab="false">
+        <entry file="file://$PROJECT_DIR$/netVLAD/Highway.py">
+          <provider selected="true" editor-type-id="text-editor">
+            <state relative-caret-position="220">
+              <caret line="10" selection-start-line="10" selection-end-line="12" selection-end-column="28" />
+              <folding>
+                <element signature="e#0#43#0" expanded="true" />
+              </folding>
+            </state>
+          </provider>
+        </entry>
+      </file>
+      <file pinned="false" current-in-tab="true">
+        <entry file="file://$PROJECT_DIR$/netVLAD/HighwayTrain.py">
+          <provider selected="true" editor-type-id="text-editor">
+            <state relative-caret-position="320">
+              <caret line="237" column="43" selection-start-line="237" selection-start-column="43" selection-end-line="237" selection-end-column="43" />
+              <folding>
+                <element signature="e#0#12#0" expanded="true" />
+                <element signature="e#3374#4595#0" />
+                <element signature="e#4624#5688#0" />
+              </folding>
+            </state>
+          </provider>
+        </entry>
+      </file>
+      <file pinned="false" current-in-tab="false">
+        <entry file="file://$PROJECT_DIR$/ScenePlaceRecgonitionTrain.py">
+          <provider selected="true" editor-type-id="text-editor">
+            <state relative-caret-position="465">
+              <caret line="457" column="13" selection-start-line="457" selection-start-column="13" selection-end-line="457" selection-end-column="13" />
+              <folding>
+                <element signature="e#48#85#0" expanded="true" />
+                <element signature="e#4800#9553#0" />
+                <element signature="e#9615#13403#0" />
+                <element signature="e#13458#15802#0" />
+                <element signature="e#15840#18164#0" />
+                <element signature="e#18239#18420#0" />
+                <element signature="e#18453#18523#0" />
+                <element signature="e#18555#18715#0" />
+                <element signature="e#26945#27254#0" />
+                <element signature="e#27303#27391#0" />
+              </folding>
+            </state>
+          </provider>
+        </entry>
+      </file>
+      <file pinned="false" current-in-tab="false">
+        <entry file="file://$PROJECT_DIR$/netVLAD/Yuquan.py">
+          <provider selected="true" editor-type-id="text-editor">
+            <state relative-caret-position="-462">
+              <folding>
+                <element signature="e#0#43#0" expanded="true" />
               </folding>
             </state>
           </provider>
@@ -38,8 +98,8 @@
       <file pinned="false" current-in-tab="false">
         <entry file="file://$PROJECT_DIR$/netVLAD/MOLP.py">
           <provider selected="true" editor-type-id="text-editor">
-            <state relative-caret-position="220">
-              <caret line="14" column="22" selection-start-line="14" selection-start-column="22" selection-end-line="14" selection-end-column="22" />
+            <state relative-caret-position="286">
+              <caret line="17" column="51" selection-start-line="17" selection-start-column="51" selection-end-line="17" selection-end-column="51" />
             </state>
           </provider>
         </entry>
@@ -47,8 +107,8 @@
       <file pinned="false" current-in-tab="false">
         <entry file="file://$PROJECT_DIR$/netVLAD/pittsburgh.py">
           <provider selected="true" editor-type-id="text-editor">
-            <state relative-caret-position="2244">
-              <caret line="114" column="8" selection-start-line="114" selection-start-column="8" selection-end-line="114" selection-end-column="29" />
+            <state relative-caret-position="132">
+              <caret line="18" selection-start-line="18" selection-end-line="20" />
             </state>
           </provider>
         </entry>
@@ -56,7 +116,7 @@
       <file pinned="false" current-in-tab="false">
         <entry file="file://$PROJECT_DIR$/SceneModel.py">
           <provider selected="true" editor-type-id="text-editor">
-            <state relative-caret-position="902">
+            <state relative-caret-position="1034">
               <caret line="47" column="25" selection-start-line="47" selection-start-column="25" selection-end-line="47" selection-end-column="25" />
               <folding>
                 <element signature="e#0#31#0" expanded="true" />
@@ -95,6 +155,7 @@
       <find>runsPath</find>
       <find>resume</find>
       <find>.to(device)</find>
+      <find>MOLP</find>
     </findStrings>
   </component>
   <component name="Git.Settings">
@@ -107,13 +168,15 @@
         <option value="$PROJECT_DIR$/arguements.py" />
         <option value="$PROJECT_DIR$/arguments.py" />
         <option value="$PROJECT_DIR$/netVLAD/tokyo247.py" />
-        <option value="$PROJECT_DIR$/ScenePlaceRecgonitionTrain.py" />
         <option value="$PROJECT_DIR$/.gitignore" />
         <option value="$PROJECT_DIR$/ScenePlaceRecognitionTest.py" />
         <option value="$PROJECT_DIR$/SceneModel.py" />
         <option value="$PROJECT_DIR$/netVLAD/MOLP.py" />
         <option value="$PROJECT_DIR$/Place365/wideresnet.py" />
         <option value="$PROJECT_DIR$/ScenePlaceRecognitionMain.py" />
+        <option value="$PROJECT_DIR$/netVLAD/Highway.py" />
+        <option value="$PROJECT_DIR$/ScenePlaceRecgonitionTrain.py" />
+        <option value="$PROJECT_DIR$/netVLAD/HighwayTrain.py" />
       </list>
     </option>
   </component>
@@ -129,7 +192,6 @@
       <foldersAlwaysOnTop value="true" />
     </navigator>
     <panes>
-      <pane id="Scope" />
       <pane id="ProjectPane">
         <subPane>
           <expand>
@@ -137,10 +199,16 @@
               <item name="ScenePlaceRecognition" type="b2602c69:ProjectViewProjectNode" />
               <item name="ScenePlaceRecognition" type="462c0819:PsiDirectoryNode" />
             </path>
+            <path>
+              <item name="ScenePlaceRecognition" type="b2602c69:ProjectViewProjectNode" />
+              <item name="ScenePlaceRecognition" type="462c0819:PsiDirectoryNode" />
+              <item name="netVLAD" type="462c0819:PsiDirectoryNode" />
+            </path>
           </expand>
           <select />
         </subPane>
       </pane>
+      <pane id="Scope" />
     </panes>
   </component>
   <component name="PropertiesComponent">
@@ -251,13 +319,13 @@
   <component name="ToolWindowManager">
     <frame x="67" y="25" width="1853" height="1055" extended-state="6" />
     <layout>
-      <window_info content_ui="combo" id="Project" order="0" visible="true" weight="0.15965009" />
+      <window_info active="true" content_ui="combo" id="Project" order="0" visible="true" weight="0.15965009" />
       <window_info id="Structure" order="1" side_tool="true" weight="0.25" />
       <window_info id="Favorites" order="2" side_tool="true" />
       <window_info anchor="bottom" id="Message" order="0" />
       <window_info anchor="bottom" id="Find" order="1" weight="0.32972974" />
       <window_info anchor="bottom" id="Run" order="2" weight="0.32900432" />
-      <window_info anchor="bottom" id="Debug" order="3" weight="0.4" />
+      <window_info anchor="bottom" id="Debug" order="3" weight="0.39935064" />
       <window_info anchor="bottom" id="Cvs" order="4" weight="0.25" />
       <window_info anchor="bottom" id="Inspection" order="5" weight="0.4" />
       <window_info anchor="bottom" id="TODO" order="6" weight="0.32972974" />
@@ -338,15 +406,6 @@
         </state>
       </provider>
     </entry>
-    <entry file="file://$PROJECT_DIR$/netVLAD/Yuquan.py">
-      <provider selected="true" editor-type-id="text-editor">
-        <state>
-          <folding>
-            <element signature="e#0#43#0" expanded="true" />
-          </folding>
-        </state>
-      </provider>
-    </entry>
     <entry file="file://$PROJECT_DIR$/netVLAD/netvlad.py">
       <provider selected="true" editor-type-id="text-editor">
         <state>
@@ -392,26 +451,6 @@
         </state>
       </provider>
     </entry>
-    <entry file="file://$PROJECT_DIR$/ScenePlaceRecgonitionTrain.py">
-      <provider selected="true" editor-type-id="text-editor">
-        <state relative-caret-position="484">
-          <caret line="82" lean-forward="true" selection-start-line="82" selection-end-line="82" />
-          <folding>
-            <element signature="e#48#85#0" expanded="true" />
-          </folding>
-        </state>
-      </provider>
-    </entry>
-    <entry file="file://$PROJECT_DIR$/ScenePlaceRecognitionMain.py">
-      <provider selected="true" editor-type-id="text-editor">
-        <state relative-caret-position="751">
-          <caret line="135" column="20" selection-start-line="135" selection-start-column="20" selection-end-line="135" selection-end-column="20" />
-          <folding>
-            <element signature="e#107#144#0" expanded="true" />
-          </folding>
-        </state>
-      </provider>
-    </entry>
     <entry file="file://$PROJECT_DIR$/Place365/wideresnet.py">
       <provider selected="true" editor-type-id="text-editor">
         <state relative-caret-position="3300">
@@ -419,23 +458,61 @@
         </state>
       </provider>
     </entry>
-    <entry file="file://$PROJECT_DIR$/netVLAD/MOLP.py">
+    <entry file="file://$PROJECT_DIR$/netVLADbase.py">
       <provider selected="true" editor-type-id="text-editor">
-        <state relative-caret-position="220">
-          <caret line="14" column="22" selection-start-line="14" selection-start-column="22" selection-end-line="14" selection-end-column="22" />
+        <state relative-caret-position="176">
+          <caret line="9" column="8" selection-start-line="9" selection-start-column="8" selection-end-line="9" selection-end-column="8" />
         </state>
       </provider>
     </entry>
-    <entry file="file://$PROJECT_DIR$/netVLAD/pittsburgh.py">
+    <entry file="file://$PROJECT_DIR$/netVLAD/MOLP.py">
       <provider selected="true" editor-type-id="text-editor">
-        <state relative-caret-position="2244">
-          <caret line="114" column="8" selection-start-line="114" selection-start-column="8" selection-end-line="114" selection-end-column="29" />
+        <state relative-caret-position="286">
+          <caret line="17" column="51" selection-start-line="17" selection-start-column="51" selection-end-line="17" selection-end-column="51" />
+        </state>
+      </provider>
+    </entry>
+    <entry file="file://$PROJECT_DIR$/netVLAD/Yuquan.py">
+      <provider selected="true" editor-type-id="text-editor">
+        <state relative-caret-position="-462">
+          <folding>
+            <element signature="e#0#43#0" expanded="true" />
+          </folding>
+        </state>
+      </provider>
+    </entry>
+    <entry file="file://$PROJECT_DIR$/ScenePlaceRecognitionMain.py">
+      <provider selected="true" editor-type-id="text-editor">
+        <state relative-caret-position="-1340">
+          <caret line="47" column="58" selection-start-line="47" selection-start-column="58" selection-end-line="47" selection-end-column="58" />
+          <folding>
+            <element signature="e#107#144#0" expanded="true" />
+          </folding>
+        </state>
+      </provider>
+    </entry>
+    <entry file="file://$PROJECT_DIR$/ScenePlaceRecgonitionTrain.py">
+      <provider selected="true" editor-type-id="text-editor">
+        <state relative-caret-position="465">
+          <caret line="457" column="13" selection-start-line="457" selection-start-column="13" selection-end-line="457" selection-end-column="13" />
+          <folding>
+            <element signature="e#48#85#0" expanded="true" />
+            <element signature="e#4800#9553#0" />
+            <element signature="e#9615#13403#0" />
+            <element signature="e#13458#15802#0" />
+            <element signature="e#15840#18164#0" />
+            <element signature="e#18239#18420#0" />
+            <element signature="e#18453#18523#0" />
+            <element signature="e#18555#18715#0" />
+            <element signature="e#26945#27254#0" />
+            <element signature="e#27303#27391#0" />
+          </folding>
         </state>
       </provider>
     </entry>
     <entry file="file://$PROJECT_DIR$/SceneModel.py">
       <provider selected="true" editor-type-id="text-editor">
-        <state relative-caret-position="902">
+        <state relative-caret-position="1034">
           <caret line="47" column="25" selection-start-line="47" selection-start-column="25" selection-end-line="47" selection-end-column="25" />
           <folding>
             <element signature="e#0#31#0" expanded="true" />
@@ -443,10 +520,32 @@
         </state>
       </provider>
     </entry>
-    <entry file="file://$PROJECT_DIR$/netVLADbase.py">
+    <entry file="file://$PROJECT_DIR$/netVLAD/pittsburgh.py">
       <provider selected="true" editor-type-id="text-editor">
-        <state relative-caret-position="176">
-          <caret line="9" column="8" selection-start-line="9" selection-start-column="8" selection-end-line="9" selection-end-column="8" />
+        <state relative-caret-position="132">
+          <caret line="18" selection-start-line="18" selection-end-line="20" />
+        </state>
+      </provider>
+    </entry>
+    <entry file="file://$PROJECT_DIR$/netVLAD/Highway.py">
+      <provider selected="true" editor-type-id="text-editor">
+        <state relative-caret-position="220">
+          <caret line="10" selection-start-line="10" selection-end-line="12" selection-end-column="28" />
+          <folding>
+            <element signature="e#0#43#0" expanded="true" />
+          </folding>
+        </state>
+      </provider>
+    </entry>
+    <entry file="file://$PROJECT_DIR$/netVLAD/HighwayTrain.py">
+      <provider selected="true" editor-type-id="text-editor">
+        <state relative-caret-position="320">
+          <caret line="237" column="43" selection-start-line="237" selection-start-column="43" selection-end-line="237" selection-end-column="43" />
+          <folding>
+            <element signature="e#0#12#0" expanded="true" />
+            <element signature="e#3374#4595#0" />
+            <element signature="e#4624#5688#0" />
+          </folding>
         </state>
       </provider>
     </entry>
