@@ -1,0 +1,19 @@
+highway 训练并测试
+====> Calculating recall @ N
+====> Recall@1: 0.0341
+====> Recall@5: 0.0803
+====> Recall@10: 0.0964
+====> Recall@20: 0.1506
+
+
+未训练 highway 测试
+====> Calculating recall @ N
+====> Recall@1: 0.0422
+====> Recall@5: 0.0582
+====> Recall@10: 0.0663
+====> Recall@20: 0.1406
+
+
+效果太有限？
+1.训练样本数太小，不足以改变？
+2.训练过程是否有误？-训练集指定错误，使用了val子集

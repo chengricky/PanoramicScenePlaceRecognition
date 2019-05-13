@@ -37,12 +37,12 @@ import arguments
 
 parser = argparse.ArgumentParser(description='ScenePlaceRecognitionTrain')
 parser.add_argument('--mode', type=str, default='train', help='Mode', choices=['train', 'cluster'])
-parser.add_argument('--batchSize', type=int, default=3,
+parser.add_argument('--batchSize', type=int, default=2,
                     help='Number of triplets (query, pos, negs). Each triplet consists of 12 images.')
-parser.add_argument('--cacheBatchSize', type=int, default=24, help='Batch size for caching and testing')
+parser.add_argument('--cacheBatchSize', type=int, default=4, help='Batch size for caching and testing')
 parser.add_argument('--cacheRefreshRate', type=int, default=1000,
                     help='How often to refresh cache, in number of queries. 0 for off')
-parser.add_argument('--nEpochs', type=int, default=30, help='number of epochs to train for')
+parser.add_argument('--nEpochs', type=int, default=40, help='number of epochs to train for')
 parser.add_argument('--start-epoch', default=0, type=int, metavar='N',
                     help='manual epoch number (useful on restarts)')
 parser.add_argument('--nGPU', type=int, default=1, help='number of GPU to use.')
@@ -60,16 +60,16 @@ parser.add_argument('--runsPath', type=str, default='runs/', help='Path to save 
 parser.add_argument('--savePath', type=str, default='checkpoints/',
                     help='Path to save checkpoints to in logdir. Default=checkpoints/')
 parser.add_argument('--cachePath', type=str, default='/tmp/', help='Path to save cache to.')
-parser.add_argument('--resume', type=str, default='',
+parser.add_argument('--resume', type=str, default='/home/ricky/ScenePlaceRecognition',
                     help='Path to load checkpoint from, for resuming training or testing.')
 parser.add_argument('--ckpt', type=str, default='latest',
                     help='Resume from latest or best checkpoint.', choices=['latest', 'best'])
 parser.add_argument('--evalEvery', type=int, default=1,
                     help='Do a validation set run, and save, every N epochs.')
 parser.add_argument('--patience', type=int, default=10, help='Patience for early stopping. 0 is off.')
-parser.add_argument('--dataset', type=str, default='pittsburgh',
+parser.add_argument('--dataset', type=str, default='highway',
                     help='Dataset to use', choices=['pittsburgh', 'tokyo247', 'highway'])
-parser.add_argument('--arch', type=str, default='vgg16',
+parser.add_argument('--arch', type=str, default='resnet18',
                     help='basenetwork to use', choices=['vgg16', 'alexnet', 'resnet18'])
 parser.add_argument('--pooling', type=str, default='netvlad', help='type of pooling to use',
                     choices=['netvlad', 'max', 'avg'])
@@ -78,7 +78,7 @@ parser.add_argument('--margin', type=float, default=0.1, help='Margin for triple
 parser.add_argument('--split', type=str, default='val', help='Data split to use for testing. Default is val',
                     choices=['test', 'test250k', 'train', 'val'])
 parser.add_argument('--fromscratch', action='store_true', help='Train from scratch rather than using pretrained models')
-parser.add_argument('--withAttention')
+parser.add_argument('--panoramicCrop', type=int, default=8, help='Number of panoramic crops')
 
 
 def train(epoch):
@@ -109,11 +109,31 @@ def train(epoch):
                                        dtype=np.float32)#float32
             with torch.no_grad():
                 for iteration, (input, indices) in enumerate(whole_training_data_loader, 1):
-                    input = input.to(device)
-                    image_encoding = model.encoder(input)
+                    if opt.panoramicCrop > 1:
+                        input_batches = torch.empty(opt.panoramicCrop*opt.cacheBatchSize, 3, 224, 224)
+                        for idx_batch in range(opt.cacheBatchSize):
+                            for idx in range(opt.panoramicCrop):
+                                input_batches[idx+idx_batch*opt.cacheBatchSize, :, :, 0:224] \
+                                    = input[idx_batch, :, :, idx * 224:(idx + 1) * 224]
+                        input_batches = input_batches.to(device)
+                    else:
+                        input_batches = input.to(device)
+                    image_encoding = model.encoder(input_batches)
                     vlad_encoding = model.pool(image_encoding)
-                    h5feat[indices.detach().numpy(), :] = vlad_encoding.detach().cpu().numpy()
-                    del input, image_encoding, vlad_encoding
+
+                    # 将各个batch相加
+                    if opt.panoramicCrop > 1:
+                        vlad_encoding_batches = torch.empty(int(vlad_encoding.shape[0]/opt.panoramicCrop),
+                                                            vlad_encoding.shape[1])
+                        if vlad_encoding.shape[0] > opt.panoramicCrop:
+                            for ii in range(1, vlad_encoding.shape[0], opt.panoramicCrop):
+                                tmpsum = torch.sum(vlad_encoding[ii:ii + opt.panoramicCrop, :], dim=0)
+                                vlad_encoding_batches[ii//opt.panoramicCrop, :] = tmpsum
+
+                    else:
+                        vlad_encoding_batches = vlad_encoding
+                    h5feat[indices.detach().numpy(), :] = vlad_encoding_batches.detach().cpu().numpy()
+                    del input, image_encoding, vlad_encoding, vlad_encoding_batches
 
         sub_train_set = Subset(dataset=train_set, indices=subsetIdx[subIter])
         training_data_loader = DataLoader(dataset=sub_train_set, num_workers=opt.threads,
@@ -259,7 +279,7 @@ def testDataset(eval_set, epoch=0, write_tboard=False):
 
 
 
-    return distances, predictions
+    return distances, predictions, f1
 
     #_, predictions = faiss_index.search(qFeat, max(n_values))
 
@@ -445,6 +465,8 @@ if __name__ == "__main__":
         from netVLAD import pittsburgh as dataset
     elif opt.dataset.lower() == 'tokyo247':
         from netVLAD import tokyo247 as dataset
+    elif opt.dataset.lower() == 'highway':
+        from netVLAD import HighwayTrain as dataset
     else:
         raise Exception('Unknown dataset')
 
@@ -633,26 +655,27 @@ if __name__ == "__main__":
                 scheduler.step(epoch)
             train(epoch)
             if (epoch % opt.evalEvery) == 0:
-                recalls = test(whole_test_set, epoch, write_tboard=True)
-                is_best = recalls[5] > best_score
-                if is_best:
-                    not_improved = 0
-                    best_score = recalls[5]
-                else:
-                    not_improved += 1
-
+            #     recalls = test(whole_test_set, epoch, write_tboard=True)
+            #     is_best = recalls[5] > best_score
+                is_best = False
+            #     if is_best:
+            #         not_improved = 0
+            #         best_score = recalls[5]
+            #     else:
+            #         not_improved += 1
+            #
                 save_checkpoint({
                     'epoch': epoch,
                     'state_dict': model.state_dict(),
-                    'recalls': recalls,
+                    ##'recalls': recalls,
                     'best_score': best_score,
                     'optimizer': optimizer.state_dict(),
                     'parallel': isParallel,
                 }, is_best)
+            #
+            #     if opt.patience > 0 and not_improved > (opt.patience / opt.evalEvery):
+            #         print('Performance did not improve for', opt.patience, 'epochs. Stopping.')
+            #         break
 
-                if opt.patience > 0 and not_improved > (opt.patience / opt.evalEvery):
-                    print('Performance did not improve for', opt.patience, 'epochs. Stopping.')
-                    break
-
-        print("=> Best Recall@5: {:.4f}".format(best_score), flush=True)
+        # print("=> Best Recall@5: {:.4f}".format(best_score), flush=True)
         writer.close()

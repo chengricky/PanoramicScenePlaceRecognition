@@ -4,9 +4,7 @@ import torch.utils.data as data
 
 import os
 from os.path import join, exists
-from scipy.io import loadmat
 import numpy as np
-from random import randint, random
 from collections import namedtuple
 from PIL import Image
 
@@ -62,7 +60,8 @@ def parse_dbStruct(whichSet):
         dbImage = dbImage[: int(len(dbImage)*0.9)]
     else:
         dbImage = dbImage[int(len(dbImage) * 0.9):]
-    utmDb = list(range(0, len(dbImage)))
+    numDb = len(dbImage)
+    utmDb = np.linspace(start=0, stop=numDb-1, num=numDb, endpoint=True, dtype=np.int16).reshape(-1, 1)
 
     qImage = os.listdir(qFolder)
     qImage.sort()
@@ -70,10 +69,8 @@ def parse_dbStruct(whichSet):
         qImage = qImage[: int(len(qImage)*0.9)]
     else:
         qImage = qImage[int(len(qImage) * 0.9):]
-    utmQ = list(range(0, len(qImage)))
-
-    numDb = len(dbImage)
     numQ = len(qImage)
+    utmQ = np.linspace(start=0, stop=numQ-1, num=numQ, endpoint=True, dtype=np.int16).reshape(-1, 1)
 
     posDistThr = 25
     posDistSqThr = 635
@@ -85,15 +82,15 @@ def parse_dbStruct(whichSet):
 
 
 class WholeDatasetFromStruct(data.Dataset):
-    def __init__(self, whichSet, input_transform=None, onlyDB=False):
+    def __init__(self, whichSet, panoramicCrop = 8, input_transform=None, onlyDB=False):
         super().__init__()
 
         self.input_transform = input_transform
 
-        self.dbStruct = parse_dbStruct(structFile)
-        self.images = [join(root_dir, dbIm) for dbIm in self.dbStruct.dbImage]
+        self.dbStruct = parse_dbStruct(whichSet)
+        self.images = [join(dbFolder, dbIm) for dbIm in self.dbStruct.dbImage]
         if not onlyDB:
-            self.images += [join(queries_dir, qIm) for qIm in self.dbStruct.qImage]
+            self.images += [join(qFolder, qIm) for qIm in self.dbStruct.qImage]
 
         self.whichSet = self.dbStruct.whichSet
         self.dataset = self.dbStruct.dataset
@@ -101,8 +98,11 @@ class WholeDatasetFromStruct(data.Dataset):
         self.positives = None
         self.distances = None
 
+        self.crops = int(panoramicCrop)
+
     def __getitem__(self, index):
         img = Image.open(self.images[index])
+        img = img.resize((224 * self.crops, 224))
 
         if self.input_transform:
             img = self.input_transform(img)
@@ -155,7 +155,7 @@ def collate_fn(batch):
 
 
 class QueryDatasetFromStruct(data.Dataset):
-    def __init__(self, whichSet, nNegSample=100, nNeg=10, margin=0.1, input_transform=None):
+    def __init__(self, whichSet, panoramicCrop = 8, nNegSample=100, nNeg=10, margin=0.1, input_transform=None):
         super().__init__()
 
         self.input_transform = input_transform
@@ -197,6 +197,8 @@ class QueryDatasetFromStruct(data.Dataset):
 
         self.negCache = [np.empty((0,)) for _ in range(self.dbStruct.numQ)]
 
+        self.crops = int(panoramicCrop)
+
     def __getitem__(self, index):
         index = self.queries[index]  # re-map index to match dataset
         with h5py.File(self.cache, mode='r') as h5:
@@ -219,7 +221,7 @@ class QueryDatasetFromStruct(data.Dataset):
             knn.fit(negFeat)
 
             dNeg, negNN = knn.kneighbors(qFeat.reshape(1, -1),
-                                         self.nNeg * 10)  # to quote netvlad paper code: 10x is hacky but fine
+                                         self.nNeg * 5)  # to quote netvlad paper code: 10x is hacky but fine --10 to much
             dNeg = dNeg.reshape(-1)
             negNN = negNN.reshape(-1)
 
@@ -235,7 +237,9 @@ class QueryDatasetFromStruct(data.Dataset):
             self.negCache[index] = negIndices
 
         query = Image.open(join(qFolder, self.dbStruct.qImage[index]))
+        query = query.resize((224 * self.crops, 224))
         positive = Image.open(join(dbFolder, self.dbStruct.dbImage[posIndex]))
+        positive = positive.resize((224 * self.crops, 224))
 
         if self.input_transform:
             query = self.input_transform(query)
@@ -243,7 +247,8 @@ class QueryDatasetFromStruct(data.Dataset):
 
         negatives = []
         for negIndex in negIndices:
-            negative = Image.open(join(root_dir, self.dbStruct.dbImage[negIndex]))
+            negative = Image.open(join(dbFolder, self.dbStruct.dbImage[negIndex]))
+            negative = negative.resize((224 * self.crops, 224))
             if self.input_transform:
                 negative = self.input_transform(negative)
             negatives.append(negative)

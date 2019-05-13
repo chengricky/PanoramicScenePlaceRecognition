@@ -3,8 +3,8 @@ import os
 import json
 
 def readArguments(opt, parser, restore_var):
-    flag_file = os.join(opt.resume, 'checkpoints', 'flags.json')
-    if os.exists(flag_file):
+    flag_file = os.path.join(opt.resume, 'checkpoints', 'flags.json')
+    if os.path.exists(flag_file):
         with open(flag_file, 'r') as f:
             stored_flags = {'--' + k: str(v) for k, v in json.load(f).items() if k in restore_var}
             to_del = []
