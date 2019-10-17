@@ -37,7 +37,7 @@ def loadSceneRecognitionModel(trainedNetVLADLayers):
     for name in features_names:
         model._modules.get(name).register_forward_hook(hook_feature)
 
-    # hook the layer for netVLAD
+    # hook the layer for DataSet
     features_candidates = ['layer4', 'layer3', 'layer2', 'layer1', 'relu1']
     model._modules.get(features_candidates[trainedNetVLADLayers]).register_forward_hook(hook_layer)
 

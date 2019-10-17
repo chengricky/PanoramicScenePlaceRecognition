@@ -1,7 +1,7 @@
 .idea/
 data/
 runs/
-checkpoints/
+checkpoint*/
 *.pth.tar
 
 # Created by .ignore support plugin (hsz.mobi)

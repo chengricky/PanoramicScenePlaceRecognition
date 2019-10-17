@@ -1,6 +1,6 @@
-# This file defines the CNN combined netVLAD module and scene catagory utility
+# This file defines the CNN combined DataSet module and scene catagory utility
 
-# loading resnet18 of trained with netVLAD as the basenet
+# loading resnet18 of trained with DataSet as the basenet
 import torch.nn as nn
 import math
 

@@ -2,31 +2,26 @@
 
 from __future__ import print_function
 import argparse
-from math import log10, ceil
+from math import ceil
 import random, shutil, json
-from os.path import join, exists, isfile, realpath, dirname
-from os import makedirs, remove, chdir, environ
+from os.path import join, exists, isfile
+from os import makedirs, remove
 
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
 import torch.optim as optim
-from torch.autograd import Variable
 from torch.utils.data import DataLoader
 from torch.utils.data.sampler import SubsetRandomSampler
 from torch.utils.data.dataset import Subset
-import torchvision.transforms as transforms
-from PIL import Image
 from datetime import datetime
-import torchvision.datasets as datasets
 import torchvision.models as models
 import h5py
 import faiss
 
 from tensorboardX import SummaryWriter
 import numpy as np
-from netVLAD import netvlad
-
+import netvlad
 
 import warnings
 import arguments
@@ -68,7 +63,7 @@ parser.add_argument('--evalEvery', type=int, default=1,
                     help='Do a validation set run, and save, every N epochs.')
 parser.add_argument('--patience', type=int, default=10, help='Patience for early stopping. 0 is off.')
 parser.add_argument('--dataset', type=str, default='highway',
-                    help='Dataset to use', choices=['pittsburgh', 'tokyo247', 'highway'])
+                    help='DataSet to use', choices=['pittsburgh', 'tokyo247', 'highway'])
 parser.add_argument('--arch', type=str, default='resnet18',
                     help='basenetwork to use', choices=['vgg16', 'alexnet', 'resnet18'])
 parser.add_argument('--pooling', type=str, default='netvlad', help='type of pooling to use',
@@ -462,11 +457,11 @@ if __name__ == "__main__":
 
     ## designate the dataset to train
     if opt.dataset.lower() == 'pittsburgh':
-        from netVLAD import pittsburgh as dataset
+        from DataSet import pittsburgh as dataset
     elif opt.dataset.lower() == 'tokyo247':
-        from netVLAD import tokyo247 as dataset
+        from DataSet import tokyo247 as dataset
     elif opt.dataset.lower() == 'highway':
-        from netVLAD import HighwayTrain as dataset
+        from DataSet import HighwayTrain as dataset
     else:
         raise Exception('Unknown dataset')
 
