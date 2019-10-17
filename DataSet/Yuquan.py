@@ -110,5 +110,10 @@ class DatasetFromStruct(data.Dataset):
                     if gnss_distance(c1, c2) < 50:
                         tmp.append(j)
                 self.positives.append(tmp)
+        falseGT=0
+        for p in range(len(self.positives)):
+            if self.positives[p] == [] and self.overlap[i]==1:
+                falseGT += 1
+        print('falseGT', falseGT)
         return self.positives
 
