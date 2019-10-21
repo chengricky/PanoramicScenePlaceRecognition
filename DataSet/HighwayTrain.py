@@ -7,7 +7,7 @@ from os.path import join, exists
 import numpy as np
 from collections import namedtuple
 from PIL import Image
-
+import faiss
 from sklearn.neighbors import NearestNeighbors
 import h5py
 
@@ -102,7 +102,7 @@ class WholeDatasetFromStruct(data.Dataset):
 
     def __getitem__(self, index):
         img = Image.open(self.images[index])
-        img = img.resize((224 * self.crops, 224))
+        # img = img.resize((224 * self.crops, 224))
 
         if self.input_transform:
             img = self.input_transform(img)
@@ -199,6 +199,10 @@ class QueryDatasetFromStruct(data.Dataset):
 
         self.crops = int(panoramicCrop)
 
+        self.pool_size = 0
+        # self.gpu_index_flat = None
+        self.index_flat = None
+
     def __getitem__(self, index):
         index = self.queries[index]  # re-map index to match dataset
         with h5py.File(self.cache, mode='r') as h5:
@@ -208,9 +212,20 @@ class QueryDatasetFromStruct(data.Dataset):
             qFeat = h5feat[index + qOffset]
 
             posFeat = h5feat[self.nontrivial_positives[index].tolist()]
-            knn = NearestNeighbors(n_jobs=-1)  # TODO replace with faiss?
-            knn.fit(posFeat)
-            dPos, posNN = knn.kneighbors(qFeat.reshape(1, -1), 1)
+            if self.pool_size == 0:
+                # netVLAD dimension
+                pool_size = posFeat.shape[1]
+                # build a flat (CPU) index
+                self.index_flat = faiss.IndexFlatL2(pool_size)
+                # make it into a gpu index
+                # self.gpu_index_flat = faiss.index_cpu_to_gpu(self.res, 0, index_flat)
+            else:
+                self.index_flat.reset()
+            # add vectors to the index
+            self.index_flat.add(posFeat)
+            # search for the nearest +ive
+            dPos, posNN = self.index_flat.search(qFeat.reshape(1, -1).astype('float32'), 1)
+
             dPos = dPos.item()
             posIndex = self.nontrivial_positives[index][posNN[0]].item()
 
@@ -218,10 +233,11 @@ class QueryDatasetFromStruct(data.Dataset):
             negSample = np.unique(np.concatenate([self.negCache[index], negSample]))
 
             negFeat = h5feat[negSample.tolist()]
-            knn.fit(negFeat)
+            self.index_flat.reset()
+            self.index_flat.add(negFeat)
+            # to quote netVLAD paper code: 10x is hacky but fine
+            dNeg, negNN = self.index_flat.search(qFeat.reshape(1, -1).astype('float32'), self.nNeg*10)
 
-            dNeg, negNN = knn.kneighbors(qFeat.reshape(1, -1),
-                                         self.nNeg * 5)  # to quote netvlad paper code: 10x is hacky but fine --10 to much
             dNeg = dNeg.reshape(-1)
             negNN = negNN.reshape(-1)
 
@@ -237,9 +253,9 @@ class QueryDatasetFromStruct(data.Dataset):
             self.negCache[index] = negIndices
 
         query = Image.open(join(qFolder, self.dbStruct.qImage[index]))
-        query = query.resize((224 * self.crops, 224))
+        # query = query.resize((224 * self.crops, 224))
         positive = Image.open(join(dbFolder, self.dbStruct.dbImage[posIndex]))
-        positive = positive.resize((224 * self.crops, 224))
+        # positive = positive.resize((224 * self.crops, 224))
 
         if self.input_transform:
             query = self.input_transform(query)
@@ -248,7 +264,7 @@ class QueryDatasetFromStruct(data.Dataset):
         negatives = []
         for negIndex in negIndices:
             negative = Image.open(join(dbFolder, self.dbStruct.dbImage[negIndex]))
-            negative = negative.resize((224 * self.crops, 224))
+            # negative = negative.resize((224 * self.crops, 224))
             if self.input_transform:
                 negative = self.input_transform(negative)
             negatives.append(negative)

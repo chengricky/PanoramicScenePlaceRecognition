@@ -17,4 +17,5 @@ This code is adapted from Nanne's [pytorch-NetVlad](https://github.com/Nanne/pyt
 
 Running `PlaceRecognitionMain.py` to extract descriptors and match queries with the database. 
 
-
+## Attentive Scene Place Recognition
+ 
