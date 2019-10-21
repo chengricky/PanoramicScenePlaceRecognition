@@ -8,8 +8,7 @@ import numpy as np
 class NetVLAD(nn.Module):
     """NetVLAD layer implementation"""
 
-    def __init__(self, num_clusters=64, dim=128, 
-                 normalize_input=True, vladv2=False):
+    def __init__(self, num_clusters=64, dim=128, normalize_input=True, vladv2=False, normalize_output=True):
         """
         Args:
             num_clusters : int
@@ -31,6 +30,7 @@ class NetVLAD(nn.Module):
         self.normalize_input = normalize_input
         self.conv = nn.Conv2d(dim, num_clusters, kernel_size=(1, 1), bias=vladv2)#environvladv2
         self.centroids = nn.Parameter(torch.rand(num_clusters, dim))
+        self.normalize_output = normalize_output
 
     def init_params(self, clsts, traindescs):
         #TODO replace numpy ops with pytorch ops
@@ -81,8 +81,9 @@ class NetVLAD(nn.Module):
             residual *= soft_assign[:,C:C+1,:].unsqueeze(2)
             vlad[:,C:C+1,:] = residual.sum(dim=-1)
 
-        vlad = F.normalize(vlad, p=2, dim=2)  # intra-normalization
-        vlad = vlad.view(x.size(0), -1)  # flatten
-        vlad = F.normalize(vlad, p=2, dim=1)  # L2 normalize
+        if self.normalize_output:
+            vlad = F.normalize(vlad, p=2, dim=2)  # intra-normalization
+            vlad = vlad.view(x.size(0), -1)  # flatten
+            vlad = F.normalize(vlad, p=2, dim=1)  # L2 normalize
 
         return vlad

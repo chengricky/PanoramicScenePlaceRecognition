@@ -85,7 +85,7 @@ class DatasetFromStruct(data.Dataset):
 
     def __getitem__(self, index):
         img = Image.open(self.images[index])
-        img = img.resize((896, 224))
+        # img = img.resize((896, 224))
 
         if self.input_transform:
             img = self.input_transform(img)
@@ -100,19 +100,20 @@ class DatasetFromStruct(data.Dataset):
         if self.positives is None:
             index = faiss.IndexFlatL2(2)
             index.add(self.utmDb.astype('float32'))
-            dis, ind = index.search(self.utmQ.astype('float32'), 100)
+            dis, ind = index.search(self.utmQ.astype('float32'), 629)
             self.positives = []
             for i in range(len(ind)):
                 tmp = []
-                for j in ind[i]:
-                    c1 = list(self.utmQ[i, :])
-                    c2 = list(self.utmDb[j, :])
-                    if gnss_distance(c1, c2) < 50:
-                        tmp.append(j)
+                if self.overlap[i] == 1:
+                    for j in ind[i]:
+                        c1 = list(self.utmQ[i, :])
+                        c2 = list(self.utmDb[j, :])
+                        if gnss_distance(c1, c2) < 50:
+                            tmp.append(j)
                 self.positives.append(tmp)
         falseGT=0
         for p in range(len(self.positives)):
-            if self.positives[p] == [] and self.overlap[i]==1:
+            if self.positives[p] == [] and self.overlap[p] == 1:
                 falseGT += 1
         print('falseGT', falseGT)
         return self.positives

@@ -2,20 +2,15 @@
 from __future__ import print_function
 import argparse
 import random
-from os.path import join, exists
-
+from os.path import join, isfile
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
 from torch.utils.data import DataLoader
-import h5py
 import faiss
 import numpy as np
 import netvlad
-import cv2
 
-import SceneModel
-import warnings
 
 parser = argparse.ArgumentParser(description='ScenePlaceRecognitionTest')
 parser.add_argument('--cacheBatchSize', type=int, default=8, help='Batch size for caching and testing')
@@ -33,78 +28,41 @@ parser.add_argument('--dataset', type=str, default='Yuquan',
                     help='DataSet to use', choices=['MOLP', 'Yuquan', 'Highway'])
 parser.add_argument('--pooling', type=str, default='netvlad', help='type of pooling to use',
                     choices=['netvlad', 'max', 'avg'])
+parser.add_argument('--fusion', type=str, default='concat', help='how to fuse multiple descriptors',
+                    choices=['add', 'concat'])
 parser.add_argument('--num_clusters', type=int, default=64, help='Number of NetVlad clusters. Default=64')
-parser.add_argument('--attention', action='store_true', help='Whether with the attention module.')
 parser.add_argument('--netVLADtrainNum', type=int, default=2, help='Number of trained blocks in Resnet18.')
-parser.add_argument('--panoramicCrop', type=int, default=4, help='Number of panoramic crops')
+parser.add_argument('--panoramicCrop', type=int, default=5, help='Number of panoramic crops')
 
 
-def load_labels():
-    # prepare all the labels
-    # scene category relevant
-    file_name_category = 'Place365/categories_places365.txt'
-    classes = list()
-    with open(file_name_category) as class_file:
-        for line in class_file:
-            classes.append(line.strip().split(' ')[0][3:])
-    classes = tuple(classes)
-
-    # indoor and outdoor relevant
-    file_name_IO = 'Place365/IO_places365.txt'
-    with open(file_name_IO) as f:
-        lines = f.readlines()
-        labels_IO = []
-        for line in lines:
-            items = line.rstrip().split()
-            labels_IO.append(int(items[-1]) -1) # 0 is indoor, 1 is outdoor
-    labels_IO = np.array(labels_IO)
-
-    # scene attribute relevant
-    file_name_attribute = 'Place365/labels_sunattribute.txt'
-    with open(file_name_attribute) as f:
-        lines = f.readlines()
-        labels_attribute = [item.rstrip() for item in lines]
-    file_name_W = 'Place365/W_sceneattribute_wideresnet18.npy'
-    W_attribute = np.load(file_name_W)
-
-    return classes, labels_IO, labels_attribute, W_attribute
+class Flatten(nn.Module):
+    def forward(self, input):
+        return input.view(input.size(0), -1)
 
 
-def returnCAM(feature_conv_b, weight_softmax, class_idx):
-    # generate the class activation maps upsample to 256x256
-    # size_upsample = (256, 256)
-    batch, nc, h, w = feature_conv_b.shape
-    output_cam = torch.zeros(opt.panoramicCrop, 1, h, w)
-    for b in range(0, batch):
-        feature_conv = feature_conv_b[b, :, :, :].squeeze()
-        for idx in class_idx[b]:
-            cam = weight_softmax[idx, :].dot(feature_conv.reshape((nc, h*w)))
-            cam = cam.reshape(1, h, w)
-            cam_img = torch.from_numpy(cam)
-            output_cam[b, :, :, :] += cam_img
-        output_cam[b, :, :, :] = output_cam[b, :, :, :] - torch.min(output_cam[b, :, :, :])
-        output_cam[b, :, :, :] = output_cam[b, :, :, :] / torch.max(output_cam[b, :, :, :])
-    return output_cam
+class L2Norm(nn.Module):
+    def __init__(self, dim=1):
+        super().__init__()
+        self.dim = dim
 
-
-def returnAttention(feature_conv_b, weight_softmax, class_idx):
-    # get the attention map from places branch
-    CAM = returnCAM(SceneModel.features_blobs[0], weight_softmax, class_idx).to(device)
-    batch, nc, h, w = feature_conv_b.shape
-    output_cam = feature_conv_b.mul(CAM)
-    return output_cam
+    def forward(self, input):
+        return F.normalize(input, p=2, dim=self.dim)
 
 
 def test_dataset(eval_set, output_feats=False):
-    # TODO what if features dont fit in memory?
-    test_data_loader = DataLoader(dataset=eval_set,
-                                  num_workers=opt.threads, batch_size=opt.cacheBatchSize, shuffle=False,
-                                  pin_memory=cuda)
+    test_data_loader = DataLoader(dataset=eval_set, num_workers=opt.threads,
+                                  batch_size=opt.cacheBatchSize, shuffle=False, pin_memory=cuda)
+    model.eval()
     # 不会反向传播，提高inference速度
     with torch.no_grad():
         print('====> Extracting Features')
         pool_size = encoder_dim
-        if opt.pooling.lower() == 'netvlad': pool_size *= opt.num_clusters
+        if opt.pooling.lower() == 'netvlad' and opt.fusion.lower() == 'add':
+            pool_size *= opt.num_clusters
+        elif opt.pooling.lower() == 'netvlad':
+            pool_size *= opt.num_clusters*opt.panoramicCrop
+        else:
+            pool_size *= opt.panoramicCrop
         dbFeat = np.empty((len(eval_set), pool_size))
 
         for iteration, (input, indices) in enumerate(test_data_loader, 1):
@@ -118,35 +76,38 @@ def test_dataset(eval_set, output_feats=False):
             del input
             input_batches = input_batches.to(device)
 
-            # forward pass - add scene information
-            logit = modelPlaces.forward(input_batches)
-            h_x = F.softmax(logit, 1).data
-            probs, idx = h_x.sort(1, True)
-            #probs = probs.cpu().numpy()
-            idx = idx.cpu().numpy()
-            #CAMs = returnCAM(SceneModel.features_blobs[0], weight_softmax, [idx[0]])  # layer4
-            #SceneModel.features_blobs.clear()
-
             # forward pass - netvlad
-            image_encoding = model.encoder(SceneModel.netVLADlayer_input[0])
-            SceneModel.netVLADlayer_input.clear()
-            # 引入attention机制
-            if opt.attention:
-                image_encoding = returnAttention(image_encoding, weight_softmax, idx[:, :1])  # layer4
-            SceneModel.features_blobs.clear()
+            image_encoding = model.encoder(input_batches)
             vlad_encoding_batches = model.pool(image_encoding)
 
             # 将各个batch相加
-            vlad_encoding = np.zeros((inN, vlad_encoding_batches.shape[1]))
-            for i in range(inN):
-                for j in range(opt.panoramicCrop):
-                    vlad_encoding[i, :] += vlad_encoding_batches[i*opt.panoramicCrop+j, :].detach().cpu().numpy()
+            if opt.pooling.lower() == 'netvlad' and opt.fusion.lower() == 'add':
+                vlad_encoding = torch.zeros(inN, vlad_encoding_batches.shape[1], vlad_encoding_batches.shape[2])
+                for i in range(inN):
+                    for j in range(opt.panoramicCrop):
+                        vlad_encoding[i, :, :] += vlad_encoding_batches[i*opt.panoramicCrop+j, :, :].detach().cpu()
 
-            dbFeat[indices.detach().numpy(), :] = vlad_encoding
+                vlad_encoding = F.normalize(vlad_encoding, p=2, dim=2)  # intra-normalization
+                vlad_encoding = vlad_encoding.view(inN, -1)  # flatten
+                vlad_encoding = F.normalize(vlad_encoding, p=2, dim=1)  # L2 normalize
+            else:
+                if opt.pooling.lower() == 'netvlad':
+                    vlad_encoding_batches = F.normalize(vlad_encoding_batches, p=2, dim=2)  # intra-normalization
+                    vlad_encoding_batches = vlad_encoding_batches.view(vlad_encoding_batches.shape[0], -1)  # flatten
+                    vlad_encoding_batches = F.normalize(vlad_encoding_batches, p=2, dim=1)  # L2 normalize
+                vlad_encoding = torch.zeros(inN, vlad_encoding_batches.shape[1]*opt.panoramicCrop)
+                print(vlad_encoding_batches.shape[0])
+                for i in range(inN):
+                    for j in range(opt.panoramicCrop):
+                        vlad_encoding[i, vlad_encoding_batches.shape[1]*j:vlad_encoding_batches.shape[1]*(j+1)] = \
+                            vlad_encoding_batches[i * opt.panoramicCrop + j, :].detach().cpu()
+                vlad_encoding = F.normalize(vlad_encoding, p=2, dim=1)  # L2 normalize
+
+            dbFeat[indices.detach().numpy(), :] = vlad_encoding.numpy()
             if iteration % 50 == 0 or len(test_data_loader) <= 10:
                 print("==> Batch ({}/{})".format(iteration, len(test_data_loader)), flush=True)
 
-            del input_batches, logit, vlad_encoding, image_encoding, vlad_encoding_batches
+            del input_batches, vlad_encoding, image_encoding, vlad_encoding_batches
     del test_data_loader
 
     # extracted for both db and query, now split in own sets
@@ -162,92 +123,46 @@ def test_dataset(eval_set, output_feats=False):
     faiss_index.add(dbFeat)
 
     print('====> Calculating recall @ N')
-    n_values = [1, 5, 10]
+    n_values = [1, 5, 10, 20]
     distances, predictions = faiss_index.search(qFeat, max(n_values))
 
-    # # for each query get those within threshold distance
-    # gt = eval_set.getPositives()
-    #
-    # correct_at_n = np.zeros(len(n_values))
-    # # TODO can we do this on the matrix in one go?
-    # for qIx, pred in enumerate(predictions):
-    #     for i, n in enumerate(n_values):
-    #         # if in top N then also in top NN, where NN > N
-    #         if np.any(np.in1d(pred[:n], gt[qIx])):
-    #             correct_at_n[i:] += 1
-    #             break
-    # recall_at_n = correct_at_n / eval_set.numQ
-    #
-    # recalls = {}  # make dict for output
-    # for i, n in enumerate(n_values):
-    #     recalls[n] = recall_at_n[i]
-    #     print("====> Recall@{}: {:.4f}".format(n, recall_at_n[i]))
+    # for each query get those within threshold distance
+    gt = eval_set.getPositives()
 
-    fp = 0
-    tp = 0
-    for i in range(0, len(predictions)):
-        if any(abs(predictions[i] - i) <= 5):
-            tp = tp + 1
+    correct_at_n = np.zeros(len(n_values))
+    numP = 0
+    # TODO can we do this on the matrix in one go?
+    for qIx, pred in enumerate(predictions):
+        if not gt[qIx]:
+            continue
         else:
-            fp = fp + 1
+            numP += 1
+        for i, n in enumerate(n_values):
+            # if in top N then also in top NN, where NN > N
+            if np.any(np.in1d(pred[:n], gt[qIx])):
+                correct_at_n[i:] += 1
+                break
+    recall_at_n = correct_at_n / numP
 
-    precision = tp/(tp+fp)
-    recall = 1
-    f1 = 2*precision/(precision+recall)
-
-    print('F1=', f1)
-
-    return distances, predictions
-    # return recalls, distances, predictions
-
-
-def test(logit, ifPrint=False):
-
-    # output the IO prediction
-    io_image = np.mean(labels_IO[idx[:10]])  # vote for the indoor or outdoor
-    if ifPrint:
-        if io_image < 0.5:
-            print('--TYPE OF ENVIRONMENT: indoor')
-        else:
-            print('--TYPE OF ENVIRONMENT: outdoor')
-
-        # output the prediction of scene category
-        print('--SCENE CATEGORIES:')
-        for i in range(0, 5):
-            print('{:.3f} -> {}'.format(probs[i], classes[idx[i]]))
-
-    # output the scene attributes
-    responses_attribute = W_attribute.dot(SceneModel.features_blobs[1])
-    idx_a = np.argsort(responses_attribute)
-    if ifPrint:
-        print('--SCENE ATTRIBUTES:')
-        print(', '.join([labels_attribute[idx_a[i]] for i in range(-1, -10, -1)]))
-
-        # generate class activation mapping
-        print('Class activation map is saved as cam.jpg')
+    recalls = {}  # make dict for output
+    for i, n in enumerate(n_values):
+        recalls[n] = recall_at_n[i]
+        print("====> Recall@{}: {:.4f}".format(n, recall_at_n[i]))
 
 
-    if ifPrint:
-        # render the CAM and output
-        img = cv2.imread('test.jpg')
-        height, width, _ = img.shape
-        heatmap = cv2.applyColorMap(cv2.resize(CAMs[0], (width, height)), cv2.COLORMAP_JET)
-        result = heatmap * 0.4 + img * 0.5
-        cv2.imwrite('cam.jpg', result)
-
-
-class Flatten(nn.Module):
-    def forward(self, input):
-        return input.view(input.size(0), -1)
-
-
-class L2Norm(nn.Module):
-    def __init__(self, dim=1):
-        super().__init__()
-        self.dim = dim
-
-    def forward(self, input):
-        return F.normalize(input, p=2, dim=self.dim)
+# loading ResNet18 of trained on places365 as the backbone
+def baseResNet(type=50):
+    from Place365 import wideresnet
+    if type == 18:
+        model_res_net = wideresnet.resnet18(num_classes=365)
+    elif type == 34:
+        model_res_net = wideresnet.resnet34()
+    elif type == 50:
+        model_res_net = wideresnet.resnet50(num_classes=365)
+    else:
+        raise Exception('Unknown ResNet Type')
+    layers = list(model_res_net.children())[:-2]  # children()只包括了第一代儿子模块，get rid of the last two layers: avepool & fc
+    return layers
 
 
 if __name__ == "__main__":
@@ -279,21 +194,16 @@ if __name__ == "__main__":
 
     # build network architecture: ResNet-18 with scene classification / scene attribute
     print('===> Building model')
-    modelPlaces = SceneModel.loadSceneRecognitionModel(opt.netVLADtrainNum)
-    # build network architecture: ResNet-18 with place recognition
-    model = SceneModel.loadPlaceRecognitionEncoder(opt.netVLADtrainNum)
+    layers = baseResNet(type=18)
+    encoder = nn.Sequential(*layers)    # 参数数目不定时，使用*号作为可变参数列表，就可以在方法内对参数进行调用。
+    model = nn.Module()
+    model.add_module('encoder', encoder)
+
     # 添加（初始化）pooling模块
     encoder_dim = 512
     if opt.pooling.lower() == 'netvlad':
-        net_vlad = netvlad.NetVLAD(num_clusters=opt.num_clusters, dim=encoder_dim, vladv2=False)
-        initcache = join(opt.dataPath, 'centroids', 'resnet18_pitts30k_' + str(opt.num_clusters) + '_desc_cen.hdf5')
-        if not exists(initcache):
-            raise FileNotFoundError('Could not find clusters, please run with --mode=cluster before proceeding')
-        with h5py.File(initcache, mode='r') as h5:
-            clsts = h5.get("centroids")[...]
-            traindescs = h5.get("descriptors")[...]
-            net_vlad.init_params(clsts, traindescs)
-            del clsts, traindescs
+        net_vlad = netvlad.NetVLAD(num_clusters=opt.num_clusters, dim=encoder_dim,
+                                   vladv2=False, normalize_output=False)
         model.add_module('pool', net_vlad)
     elif opt.pooling.lower() == 'max':
         global_pool = nn.AdaptiveMaxPool2d((1, 1))
@@ -315,20 +225,24 @@ if __name__ == "__main__":
         resume_ckpt = join(opt.resume, 'checkpoint.pth.tar')
     elif opt.ckpt.lower() == 'best':
         resume_ckpt = join(opt.resume, 'model_best.pth.tar')
-    model = SceneModel.loadNetVLADParams(resume_ckpt, opt.netVLADtrainNum, model)
 
-    # execute test procedures
-    print('===> Running evaluation step')
-    # scene recognition - load the labels
-    classes, labels_IO, labels_attribute, W_attribute = load_labels()
-    # scene recognition - get the softmax weight
-    params = list(modelPlaces.parameters())
-    weight_softmax = params[-2].data.numpy()
-    weight_softmax[weight_softmax < 0] = 0
+    if isfile(resume_ckpt):
+        print("=> loading checkpoint '{}'".format(resume_ckpt))
+        checkpoint = torch.load(resume_ckpt, map_location=lambda storage, loc: storage)
+        state_dict = checkpoint['state_dict']
+        state_dict_encoder = {k: v for k, v in state_dict.items() if 'encoder' in k}
+        state_dict_encoder = {str.replace(k, 'encoder.', ''): v for k, v in state_dict_encoder.items()}
+        model.encoder.load_state_dict(state_dict_encoder, strict=True)
+        if opt.pooling.lower() == 'netvlad':
+            state_dict_pool = {k: v for k, v in state_dict.items() if 'pool' in k}
+            state_dict_pool = {str.replace(k, 'pool.', ''): v for k, v in state_dict_pool.items()}
+            model.pool.load_state_dict(state_dict_pool, strict=True)
+    else:
+        print("=> no checkpoint found at '{}'".format(resume_ckpt))
 
-    modelPlaces = modelPlaces.to(device)
     model = model.to(device)
+
     # test
-    distances, predictions = test_dataset(whole_test_set)
+    test_dataset(whole_test_set)
 
 
