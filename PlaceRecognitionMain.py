@@ -49,6 +49,44 @@ class L2Norm(nn.Module):
         return F.normalize(input, p=2, dim=self.dim)
 
 
+def get_input_batches(input):
+    inN, inC, inH, inW = input.size()
+    sub_width = inW // opt.panoramicCrop
+    input_batches = torch.empty(opt.panoramicCrop * inN, inC, inH, sub_width)
+    input_batches.requires_grad = True
+    for bt in range(inN):
+        for idx in range(opt.panoramicCrop):
+            input_batches[bt * opt.panoramicCrop + idx, :, :, :] \
+                = input[bt, :, :, idx * sub_width:(idx + 1) * sub_width]
+    return input_batches
+
+
+def generate_vlad(batches, inN):
+    if opt.pooling.lower() == 'netvlad' and opt.fusion.lower() == 'add':
+        vlad_encoding = torch.zeros(inN, batches.shape[1], batches.shape[2])
+        vlad_encoding.requires_grad = True
+        for i in range(inN):
+            for j in range(opt.panoramicCrop):
+                vlad_encoding[i, :, :] += batches[i * opt.panoramicCrop + j, :, :].detach().cpu()
+        vlad_encoding = F.normalize(vlad_encoding, p=2, dim=2)  # intra-normalization
+        vlad_encoding = vlad_encoding.view(inN, -1)  # flatten
+        vlad_encoding = F.normalize(vlad_encoding, p=2, dim=1)  # L2 normalize
+    else:
+        if opt.pooling.lower() == 'netvlad':
+            batches = F.normalize(batches, p=2, dim=2)  # intra-normalization
+            batches = batches.view(batches.shape[0], -1)  # flatten
+            batches = F.normalize(batches, p=2, dim=1)  # L2 normalize
+        vlad_encoding = torch.zeros(inN, batches.shape[1] * opt.panoramicCrop)
+        print(batches.shape[0])
+        for i in range(inN):
+            for j in range(opt.panoramicCrop):
+                vlad_encoding[i,
+                batches.shape[1] * j:batches.shape[1] * (j + 1)] = \
+                    batches[i * opt.panoramicCrop + j, :].detach().cpu()
+        vlad_encoding = F.normalize(vlad_encoding, p=2, dim=1)  # L2 normalize
+    return vlad_encoding
+
+
 def test_dataset(eval_set, output_feats=False):
     test_data_loader = DataLoader(dataset=eval_set, num_workers=opt.threads,
                                   batch_size=opt.cacheBatchSize, shuffle=False, pin_memory=cuda)

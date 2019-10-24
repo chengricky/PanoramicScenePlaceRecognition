@@ -23,41 +23,6 @@ import netvlad
 import arguments
 
 
-def get_input_batches(input):
-    inN, inC, inH, inW = input.size()
-    sub_width = inW // opt.panoramicCrop
-    input_batches = torch.empty(opt.panoramicCrop * inN, inC, inH, sub_width)
-    for bt in range(inN):
-        for idx in range(opt.panoramicCrop):
-            input_batches[bt * opt.panoramicCrop + idx, :, :, :] \
-                = input[bt, :, :, idx * sub_width:(idx + 1) * sub_width]
-    return input_batches
-
-
-def generate_vlad(batches, inN):
-    if opt.pooling.lower() == 'netvlad' and opt.fusion.lower() == 'add':
-        vlad_encoding = torch.zeros(inN, batches.shape[1], batches.shape[2])
-        for i in range(inN):
-            for j in range(opt.panoramicCrop):
-                vlad_encoding[i, :, :] += batches[i * opt.panoramicCrop + j, :, :].detach().cpu()
-        vlad_encoding = F.normalize(vlad_encoding, p=2, dim=2)  # intra-normalization
-        vlad_encoding = vlad_encoding.view(inN, -1)  # flatten
-        vlad_encoding = F.normalize(vlad_encoding, p=2, dim=1)  # L2 normalize
-    else:
-        if opt.pooling.lower() == 'netvlad':
-            batches = F.normalize(batches, p=2, dim=2)  # intra-normalization
-            batches = batches.view(batches.shape[0], -1)  # flatten
-            batches = F.normalize(batches, p=2, dim=1)  # L2 normalize
-        vlad_encoding = torch.zeros(inN, batches.shape[1] * opt.panoramicCrop)
-        print(batches.shape[0])
-        for i in range(inN):
-            for j in range(opt.panoramicCrop):
-                vlad_encoding[i,
-                batches.shape[1] * j:batches.shape[1] * (j + 1)] = \
-                    batches[i * opt.panoramicCrop + j, :].detach().cpu()
-        vlad_encoding = F.normalize(vlad_encoding, p=2, dim=1)  # L2 normalize
-    return vlad_encoding
-
 def train(epoch):
     epoch_loss = 0
     startIter = 1  # keep track of batch iter across subsets for logging
@@ -70,7 +35,6 @@ def train(epoch):
     else:
         subsetN = 1
         subsetIdx = [np.arange(len(train_set))]
-
     nBatches = (len(train_set) + opt.batchSize - 1) // opt.batchSize
 
     for subIter in range(subsetN):
@@ -80,31 +44,26 @@ def train(epoch):
         train_set.cache = join(opt.cachePath, train_set.whichSet + '_feat_cache.hdf5')
         with h5py.File(train_set.cache, mode='w') as h5:
             pool_size = encoder_dim
-            if opt.pooling.lower() == 'netvlad' and opt.fusion.lower() == 'add':
+            if opt.pooling.lower() == 'netvlad':
                 pool_size *= opt.num_clusters
-            elif opt.pooling.lower() == 'netvlad':
-                pool_size *= opt.num_clusters * opt.panoramicCrop
-            else:
-                pool_size *= opt.panoramicCrop
             h5feat = h5.create_dataset("features", [len(whole_train_set), pool_size], dtype=np.float32)
 
             with torch.no_grad():
                 for iteration, (input, indices) in enumerate(whole_training_data_loader, 1):
-                    batches = get_input_batches(input).to(device)
-                    batches = model.encoder(batches)
-                    batches = model.pool(batches)
-                    vlad_encoding = generate_vlad(batches, input.shape[0])
-                    h5feat[indices.detach().numpy(), :] = vlad_encoding.numpy()
-                    del vlad_encoding, batches
-
-        sub_train_set = Subset(dataset=train_set, indices=subsetIdx[subIter])
-        training_data_loader = DataLoader(dataset=sub_train_set, num_workers=opt.threads, batch_size=opt.batchSize,
-                                          shuffle=True, collate_fn=dataset.collate_fn, pin_memory=True)
+                    input = input.to(device)
+                    input = model.encoder(input)
+                    input = model.pool(input)
+                    h5feat[indices.detach().numpy(), :] = input.detach().cpu().numpy()
+                    del input
         # Returns the current GPU memory usage by tensors in bytes for a given device.
         print('Allocated:', torch.cuda.memory_allocated())
         # Returns the current GPU memory managed by the caching allocator in bytes for a given device.
         print('Cached:', torch.cuda.memory_cached())
+        torch.cuda.empty_cache()
 
+        sub_train_set = Subset(dataset=train_set, indices=subsetIdx[subIter])
+        training_data_loader = DataLoader(dataset=sub_train_set, num_workers=opt.threads, batch_size=opt.batchSize,
+                                          shuffle=True, collate_fn=dataset.collate_fn, pin_memory=True)
         # 训练数据
         model.train()
         for iteration, (query, positives, negatives,
@@ -115,15 +74,11 @@ def train(epoch):
 
             B, C, H, W = query.shape
             nNeg = torch.sum(negCounts)
-            input = torch.cat([query, positives, negatives])
-
-            # input = input.to(device)
-            batches = get_input_batches(input).to(device)
+            batches = torch.cat([query, positives, negatives])
+            batches = batches.to(device)
             batches = model.encoder(batches)
             batches = model.pool(batches)
-            vlad_encoding = generate_vlad(batches, input.shape[0])
-
-            vladQ, vladP, vladN = torch.split(vlad_encoding, [B, B, nNeg])
+            vladQ, vladP, vladN = torch.split(batches, [B, B, nNeg])
 
             optimizer.zero_grad()
 
@@ -139,7 +94,7 @@ def train(epoch):
             loss /= nNeg.float().to(device)  # normalise by actual number of negatives
             loss.backward()
             optimizer.step()
-            del input, batches, vlad_encoding, vladQ, vladP, vladN
+            del batches, vladQ, vladP, vladN
             del query, positives, negatives
 
             batch_loss = loss.item()
@@ -176,62 +131,26 @@ def test(eval_set, epoch=0, write_tboard=False, output_feats=False):
     with torch.no_grad():
         print('====> Extracting Features')
         pool_size = encoder_dim
-        if opt.pooling.lower() == 'netvlad' and opt.fusion.lower() == 'add':
+        if opt.pooling.lower() == 'netvlad':
             pool_size *= opt.num_clusters
-        elif opt.pooling.lower() == 'netvlad':
-            pool_size *= opt.num_clusters*opt.panoramicCrop
-        else:
-            pool_size *= opt.panoramicCrop
         dbFeat = np.empty((len(eval_set), pool_size))
 
         for iteration, (input, indices) in enumerate(test_data_loader, 1):
-            inN, inC, inH, inW = input.size()
-            sub_width = inW // opt.panoramicCrop
-            input_batches = torch.empty(opt.panoramicCrop*inN, inC, inH, sub_width)
-            for bt in range(inN):
-                for idx in range(opt.panoramicCrop):
-                    input_batches[bt*opt.panoramicCrop+idx, :, :, :] \
-                        = input[bt, :, :, idx*sub_width:(idx+1)*sub_width]
-            del input
-            input_batches = input_batches.to(device)
 
+            input = input.to(device)
             # forward pass - netvlad
-            image_encoding = model.encoder(input_batches)
-            vlad_encoding_batches = model.pool(image_encoding)
-
-            # 将各个batch相加
-            if opt.pooling.lower() == 'netvlad' and opt.fusion.lower() == 'add':
-                vlad_encoding = torch.zeros(inN, vlad_encoding_batches.shape[1], vlad_encoding_batches.shape[2])
-                for i in range(inN):
-                    for j in range(opt.panoramicCrop):
-                        vlad_encoding[i, :, :] += vlad_encoding_batches[i*opt.panoramicCrop+j, :, :].detach().cpu()
-
-                vlad_encoding = F.normalize(vlad_encoding, p=2, dim=2)  # intra-normalization
-                vlad_encoding = vlad_encoding.view(inN, -1)  # flatten
-                vlad_encoding = F.normalize(vlad_encoding, p=2, dim=1)  # L2 normalize
-            else:
-                if opt.pooling.lower() == 'netvlad':
-                    vlad_encoding_batches = F.normalize(vlad_encoding_batches, p=2, dim=2)  # intra-normalization
-                    vlad_encoding_batches = vlad_encoding_batches.view(vlad_encoding_batches.shape[0], -1)  # flatten
-                    vlad_encoding_batches = F.normalize(vlad_encoding_batches, p=2, dim=1)  # L2 normalize
-                vlad_encoding = torch.zeros(inN, vlad_encoding_batches.shape[1]*opt.panoramicCrop)
-                print(vlad_encoding_batches.shape[0])
-                for i in range(inN):
-                    for j in range(opt.panoramicCrop):
-                        vlad_encoding[i, vlad_encoding_batches.shape[1]*j:vlad_encoding_batches.shape[1]*(j+1)] = \
-                            vlad_encoding_batches[i * opt.panoramicCrop + j, :].detach().cpu()
-                vlad_encoding = F.normalize(vlad_encoding, p=2, dim=1)  # L2 normalize
-
-            dbFeat[indices.detach().numpy(), :] = vlad_encoding.numpy()
+            input = model.encoder(input)
+            input = model.pool(input)
+            dbFeat[indices.detach().numpy(), :] = input.detach().cpu().numpy()
             if iteration % 50 == 0 or len(test_data_loader) <= 10:
                 print("==> Batch ({}/{})".format(iteration, len(test_data_loader)), flush=True)
 
-            del input_batches, vlad_encoding, image_encoding, vlad_encoding_batches
+            del input
     del test_data_loader
 
     # extracted for both db and query, now split in own sets
-    qFeat = dbFeat[eval_set.numDb:].astype('float32')
-    dbFeat = dbFeat[:eval_set.numDb].astype('float32')
+    qFeat = dbFeat[eval_set.dbStruct.numDb:].astype('float32')
+    dbFeat = dbFeat[:eval_set.dbStruct.numDb].astype('float32')
 
     if output_feats:
         np.savetxt("query.txt", qFeat)
@@ -252,7 +171,7 @@ def test(eval_set, epoch=0, write_tboard=False, output_feats=False):
     numP = 0
     # TODO can we do this on the matrix in one go?
     for qIx, pred in enumerate(predictions):
-        if not gt[qIx]:
+        if gt[qIx].size == 0:
             continue
         else:
             numP += 1
@@ -429,7 +348,7 @@ if __name__ == "__main__":
     if opt.mode.lower() != 'cluster':
         if opt.pooling.lower() == 'netvlad':
             net_vlad = netvlad.NetVLAD(num_clusters=opt.num_clusters, dim=encoder_dim,
-                                       vladv2=False, normalize_output=False)
+                                       vladv2=False, normalize_output=True)
             if not opt.resume:
                 if opt.mode.lower() == 'train':
                     initcache = join(opt.dataPath, 'centroids', opt.arch + '_' + train_set.dataset + '_' + str(
@@ -492,8 +411,8 @@ if __name__ == "__main__":
             best_metric = checkpoint['best_score']
             model.load_state_dict(checkpoint['state_dict'])
             model = model.to(device)
-            if opt.mode == 'train':
-                optimizer.load_state_dict(checkpoint['optimizer'])
+            # if opt.mode == 'train':
+            #     optimizer.load_state_dict(checkpoint['optimizer'])
             print("=> loaded checkpoint '{}' (epoch {})"
                   .format(resume_ckpt, checkpoint['epoch']))
         else:
@@ -522,9 +441,10 @@ if __name__ == "__main__":
         not_improved = 0
         best_score = 0
         for epoch in range(opt.start_epoch + 1, opt.nEpochs + 1):
+            print("lr=", scheduler.get_lr())
             train(epoch)
             if opt.optim.upper() == 'SGD':
-                scheduler.step(epoch)
+                scheduler.step(epoch-opt.start_epoch)
             if (epoch % opt.evalEvery) == 0:
                 recalls = test(whole_test_set, epoch, write_tboard=True)
                 is_best = recalls[5] > best_score

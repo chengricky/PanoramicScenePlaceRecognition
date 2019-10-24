@@ -58,9 +58,9 @@ parser.add_argument('--fusion', type=str, default='add', help='how to fuse multi
 def get_args():
     # read arguments from command or json file
     opt = parser.parse_args()
-    restore_var = [ 'lr', 'lrStep', 'lrGamma', 'weightDecay', 'momentum', 'nGPU',
-                   'runsPath', 'arch', 'num_clusters', 'pooling', 'optim',
-                   'margin', 'seed', 'patience', 'vladv2']#savePath
+    restore_var = [ 'nGPU', 'arch', 'num_clusters', 'pooling',
+                   'margin', 'seed', 'patience', 'vladv2']
+    #savePath, lr-ralated ( 'lr', 'lrStep', 'lrGamma')'weightDecay', 'momentum', 'runsPath','optim',
     if opt.resume:
         opt_loaded = read_arguments(opt, parser, restore_var)
         return opt_loaded

@@ -11,35 +11,32 @@ import faiss
 from sklearn.neighbors import NearestNeighbors
 import h5py
 
-root_dir = '/data/2015HighwayDataset/'
+root_dir = '/home/ruiqi/HighwayDataset/'
 if not exists(root_dir):
-    raise FileNotFoundError('root_dir is hardcoded, please adjust to point to MOLP dataset')
+    raise FileNotFoundError('root_dir is hardcoded, please adjust to point to HighwayTrain dataset')
 
 # the list of database folder (images)
-dbFolder = root_dir + 'Day'
-qFolder = root_dir + 'Night'
+dbFolder = root_dir + 'Day_split'
+qFolder = root_dir + 'Night_split'
 
 
 def input_transform():
     return transforms.Compose([
-        transforms.ToTensor(),
-        transforms.Normalize(mean=[0.485, 0.456, 0.406],
-                             std=[0.229, 0.224, 0.225]),
+        transforms.ToTensor(), transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]),
     ])
 
+
 def get_whole_training_set(onlyDB=False):
-    return WholeDatasetFromStruct('train',
-                                  input_transform=input_transform(),
-                                  onlyDB=onlyDB)
+    return WholeDatasetFromStruct('train', input_transform=input_transform(), onlyDB=onlyDB)
+
 
 def get_whole_val_set():
-    return WholeDatasetFromStruct('val',
-                                  input_transform=input_transform())
+    return WholeDatasetFromStruct('val', input_transform=input_transform())
 
 
 def get_training_query_set(margin=0.1):
-    return QueryDatasetFromStruct('train',
-                                  input_transform=input_transform(), margin=margin)
+    return QueryDatasetFromStruct('train', input_transform=input_transform(), margin=margin)
+
 
 # 仍然保持之前的变量名，但utm使用编号替代，Thr使用编号差替代
 dbStruct = namedtuple('dbStruct', ['whichSet', 'dataset',
@@ -48,33 +45,49 @@ dbStruct = namedtuple('dbStruct', ['whichSet', 'dataset',
 
 
 def parse_dbStruct(whichSet):
-
     dataset = 'highway'
-
-    # train, val = 9：1
-    # whichSet = whichSet
 
     dbImage = os.listdir(dbFolder)
     dbImage.sort()
-    if whichSet=='train':
-        dbImage = dbImage[: int(len(dbImage)*0.9)]
+    utmDb = np.arange(len(dbImage) // 12)
+    utmDb = np.repeat(utmDb, 12)
+    if whichSet is 'train':
+        listfiler = []
+        for i in range(int(len(dbImage) // 12 * 0.8)):
+            if i % 10 == 0:
+                for ii in range(i, i+11):
+                    listfiler.append(ii)
+        dbImage = [dbImage[i] for i in listfiler]
+        utmDb = utmDb[np.array(listfiler)].reshape(-1, 1)
+        numDb = len(dbImage)
     else:
-        dbImage = dbImage[int(len(dbImage) * 0.9):]
-    numDb = len(dbImage)
-    utmDb = np.linspace(start=0, stop=numDb-1, num=numDb, endpoint=True, dtype=np.int16).reshape(-1, 1)
+        listfiler = list(range(int(len(dbImage) * 0.8), len(dbImage)))
+        dbImage = [dbImage[i] for i in listfiler]
+        utmDb = utmDb[np.array(listfiler)].reshape(-1, 1)
+        numDb = len(dbImage)
 
     qImage = os.listdir(qFolder)
     qImage.sort()
-    if whichSet=='train':
-        qImage = qImage[: int(len(qImage)*0.9)]
+    utmQ = np.arange(len(qImage) // 12)
+    utmQ = np.repeat(utmQ, 12)
+    if whichSet is 'train':
+        listfiler = []
+        for i in range(int(len(qImage) // 12 * 0.8)):
+            if i % 10 == 0:
+                for ii in range(i, i+11):
+                    listfiler.append(ii)
+        qImage = [qImage[i] for i in listfiler]
+        utmQ = utmQ[np.array(listfiler)].reshape(-1, 1)
+        numQ = len(qImage)
     else:
-        qImage = qImage[int(len(qImage) * 0.9):]
-    numQ = len(qImage)
-    utmQ = np.linspace(start=0, stop=numQ-1, num=numQ, endpoint=True, dtype=np.int16).reshape(-1, 1)
+        listfiler = list(range(int(len(qImage) * 0.8), len(qImage)))
+        qImage = [qImage[i] for i in listfiler]
+        utmQ = utmQ[np.array(listfiler)].reshape(-1, 1)
+        numQ = len(qImage)
 
-    posDistThr = 25
-    posDistSqThr = 635
-    nonTrivPosDistSqThr = 100
+    posDistThr = 25 # find negatives
+    posDistSqThr = 625
+    nonTrivPosDistSqThr = 100 # find positives
 
     return dbStruct(whichSet, dataset, dbImage, utmDb, qImage,
                     utmQ, numDb, numQ, posDistThr,
@@ -82,7 +95,7 @@ def parse_dbStruct(whichSet):
 
 
 class WholeDatasetFromStruct(data.Dataset):
-    def __init__(self, whichSet, panoramicCrop = 8, input_transform=None, onlyDB=False):
+    def __init__(self, whichSet, input_transform=None, onlyDB=False):
         super().__init__()
 
         self.input_transform = input_transform
@@ -98,11 +111,8 @@ class WholeDatasetFromStruct(data.Dataset):
         self.positives = None
         self.distances = None
 
-        self.crops = int(panoramicCrop)
-
     def __getitem__(self, index):
         img = Image.open(self.images[index])
-        # img = img.resize((224 * self.crops, 224))
 
         if self.input_transform:
             img = self.input_transform(img)
@@ -116,11 +126,9 @@ class WholeDatasetFromStruct(data.Dataset):
         # positives for evaluation are those within trivial threshold range
         # fit NN to find them, search by radius
         if self.positives is None:
-            knn = NearestNeighbors(n_jobs=-1)
+            knn = NearestNeighbors(radius=self.dbStruct.posDistThr, n_jobs=-1)
             knn.fit(self.dbStruct.utmDb)
-
-            self.distances, self.positives = knn.radius_neighbors(self.dbStruct.utmQ,
-                                                                  radius=self.dbStruct.posDistThr)
+            self.positives = knn.radius_neighbors(self.dbStruct.utmQ, return_distance=False)
 
         return self.positives
 
@@ -155,7 +163,7 @@ def collate_fn(batch):
 
 
 class QueryDatasetFromStruct(data.Dataset):
-    def __init__(self, whichSet, panoramicCrop = 8, nNegSample=100, nNeg=10, margin=0.1, input_transform=None):
+    def __init__(self, whichSet, nNegSample=100, nNeg=10, margin=0.1, input_transform=None):
         super().__init__()
 
         self.input_transform = input_transform
@@ -197,8 +205,6 @@ class QueryDatasetFromStruct(data.Dataset):
 
         self.negCache = [np.empty((0,)) for _ in range(self.dbStruct.numQ)]
 
-        self.crops = int(panoramicCrop)
-
         self.pool_size = 0
         # self.gpu_index_flat = None
         self.index_flat = None
@@ -236,7 +242,7 @@ class QueryDatasetFromStruct(data.Dataset):
             self.index_flat.reset()
             self.index_flat.add(negFeat)
             # to quote netVLAD paper code: 10x is hacky but fine
-            dNeg, negNN = self.index_flat.search(qFeat.reshape(1, -1).astype('float32'), self.nNeg*10)
+            dNeg, negNN = self.index_flat.search(qFeat.reshape(1, -1).astype('float32'), k=self.nNeg*10)
 
             dNeg = dNeg.reshape(-1)
             negNN = negNN.reshape(-1)
@@ -253,9 +259,7 @@ class QueryDatasetFromStruct(data.Dataset):
             self.negCache[index] = negIndices
 
         query = Image.open(join(qFolder, self.dbStruct.qImage[index]))
-        # query = query.resize((224 * self.crops, 224))
         positive = Image.open(join(dbFolder, self.dbStruct.dbImage[posIndex]))
-        # positive = positive.resize((224 * self.crops, 224))
 
         if self.input_transform:
             query = self.input_transform(query)
@@ -264,7 +268,6 @@ class QueryDatasetFromStruct(data.Dataset):
         negatives = []
         for negIndex in negIndices:
             negative = Image.open(join(dbFolder, self.dbStruct.dbImage[negIndex]))
-            # negative = negative.resize((224 * self.crops, 224))
             if self.input_transform:
                 negative = self.input_transform(negative)
             negatives.append(negative)
