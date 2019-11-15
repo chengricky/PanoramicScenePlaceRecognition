@@ -15,7 +15,15 @@ Cheng, Ruiqi, et al. **Panoramic Annular Localizer: Tackling the Variation Chall
 
 This code is adapted from Nanne's [pytorch-NetVlad](https://github.com/Nanne/pytorch-NetVlad). If you would like to get more information about NetVLAD, please refer to [arXiv:1511.07247](https://arxiv.org/abs/1511.07247).
 
-Running `PlaceRecognitionMain.py` to extract descriptors and match queries with the database. 
+Running `PlaceRecognitionMain.py` to extract descriptors and match queries with the database. The exemplar of test command is
+
+```angular2
+python PlaceRecognitionMain.py --dataset=Yuquan --resume=checkpoints_res \
+--ckpt=latest  --numTrain=2 --cacheBatchSize=224 --threads=4 --fusion=add
+```
+
+Running `PlaceRecognitionTrain.py` to train descriptors using weakly supervised triplet ranking loss. The exemplar training command is in `train.sh`.
 
 ## Attentive Scene Place Recognition
  
+Running `ScenePlaceRecognitionMain.py` to extract descriptors and match queries with the database. 

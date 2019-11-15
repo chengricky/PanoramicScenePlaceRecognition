@@ -1,4 +1,7 @@
-# Test scene place recognition network (NetVLAD), which is applicable to unwrapped panoramic images
+"""
+Test place recognition network (NetVLAD), which is applicable to unwrapped panoramic images
+"""
+
 from __future__ import print_function
 import argparse
 import random
@@ -50,6 +53,7 @@ class L2Norm(nn.Module):
 
 
 def get_input_batches(input):
+    """Convert panoromas into split images for CNN input"""
     inN, inC, inH, inW = input.size()
     sub_width = inW // opt.panoramicCrop
     input_batches = torch.empty(opt.panoramicCrop * inN, inC, inH, sub_width)
@@ -62,6 +66,12 @@ def get_input_batches(input):
 
 
 def generate_vlad(batches, inN):
+    """Merge the descriptors of split images into panoramic NetVLAD
+
+    :param batches: the network output of split images
+    :param inN: the batch size (number of panorama)
+    :return: panoramic NetVLAD
+    """
     if opt.pooling.lower() == 'netvlad' and opt.fusion.lower() == 'add':
         vlad_encoding = torch.zeros(inN, batches.shape[1], batches.shape[2])
         vlad_encoding.requires_grad = True
@@ -118,28 +128,7 @@ def test_dataset(eval_set, output_feats=False):
             image_encoding = model.encoder(input_batches)
             vlad_encoding_batches = model.pool(image_encoding)
 
-            # 将各个batch相加
-            if opt.pooling.lower() == 'netvlad' and opt.fusion.lower() == 'add':
-                vlad_encoding = torch.zeros(inN, vlad_encoding_batches.shape[1], vlad_encoding_batches.shape[2])
-                for i in range(inN):
-                    for j in range(opt.panoramicCrop):
-                        vlad_encoding[i, :, :] += vlad_encoding_batches[i*opt.panoramicCrop+j, :, :].detach().cpu()
-
-                vlad_encoding = F.normalize(vlad_encoding, p=2, dim=2)  # intra-normalization
-                vlad_encoding = vlad_encoding.view(inN, -1)  # flatten
-                vlad_encoding = F.normalize(vlad_encoding, p=2, dim=1)  # L2 normalize
-            else:
-                if opt.pooling.lower() == 'netvlad':
-                    vlad_encoding_batches = F.normalize(vlad_encoding_batches, p=2, dim=2)  # intra-normalization
-                    vlad_encoding_batches = vlad_encoding_batches.view(vlad_encoding_batches.shape[0], -1)  # flatten
-                    vlad_encoding_batches = F.normalize(vlad_encoding_batches, p=2, dim=1)  # L2 normalize
-                vlad_encoding = torch.zeros(inN, vlad_encoding_batches.shape[1]*opt.panoramicCrop)
-                print(vlad_encoding_batches.shape[0])
-                for i in range(inN):
-                    for j in range(opt.panoramicCrop):
-                        vlad_encoding[i, vlad_encoding_batches.shape[1]*j:vlad_encoding_batches.shape[1]*(j+1)] = \
-                            vlad_encoding_batches[i * opt.panoramicCrop + j, :].detach().cpu()
-                vlad_encoding = F.normalize(vlad_encoding, p=2, dim=1)  # L2 normalize
+            vlad_encoding = generate_vlad(vlad_encoding_batches, inN)
 
             dbFeat[indices.detach().numpy(), :] = vlad_encoding.numpy()
             if iteration % 50 == 0 or len(test_data_loader) <= 10:
