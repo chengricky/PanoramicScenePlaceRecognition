@@ -1,4 +1,7 @@
-# Train NetVLAD on the panoramic dataset
+"""
+Train NetVLAD on the panoramic dataset
+"""
+
 from __future__ import print_function
 from math import ceil
 import random, shutil, json

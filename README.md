@@ -15,7 +15,7 @@ Cheng, Ruiqi, et al. **Panoramic Annular Localizer: Tackling the Variation Chall
 
 This code is adapted from Nanne's [pytorch-NetVlad](https://github.com/Nanne/pytorch-NetVlad). If you would like to get more information about NetVLAD, please refer to [arXiv:1511.07247](https://arxiv.org/abs/1511.07247).
 
-Running `PlaceRecognitionMain.py` to extract descriptors and match queries with the database. The exemplar of test command is
+Running `PlaceRecognitionMain.py` to extract descriptors and match queries with the database. The ResNet-18-based NetVLAD checkpoint trained on Pitts-30k (used in [arXiv:1905.05425](https://arxiv.org/abs/1905.05425)) can be downloaded [here](https://drive.google.com/open?id=1F6AZ6Z_5Qa5pxDX8T5hHWxMNRyxQ3O6I). The exemplar of test command is
 
 ```angular2
 python PlaceRecognitionMain.py --dataset=Yuquan --resume=checkpoints_res \
@@ -23,6 +23,8 @@ python PlaceRecognitionMain.py --dataset=Yuquan --resume=checkpoints_res \
 ```
 
 Running `PlaceRecognitionTrain.py` to train descriptors using weakly supervised triplet ranking loss. The exemplar training command is in `train.sh`.
+
+Please be aware that the code is only the descriptor part of PAL (Panoramic Annular Localizer). Please refer to the [link](https://github.com/chengricky/PAL) for the other part of PAL. 
 
 ## Attentive Scene Place Recognition
  
