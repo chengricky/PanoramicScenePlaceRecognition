@@ -25,7 +25,5 @@ python PlaceRecognitionMain.py --dataset=Yuquan --resume=checkpoints_res \
 Running `PlaceRecognitionTrain.py` to train descriptors using weakly supervised triplet ranking loss. The exemplar training command is in `train.sh`.
 
 Please be aware that the code is only the descriptor part of PAL (Panoramic Annular Localizer). Please refer to the [link](https://github.com/chengricky/PAL) for the other part of PAL. 
-
-## Attentive Scene Place Recognition
  
 Running `ScenePlaceRecognitionMain.py` to extract descriptors and match queries with the database. 
